@@ -1,330 +1,123 @@
-import { useState } from "react";
+import { ChangeEvent, Dispatch, DragEvent, PointerEvent, SetStateAction, useEffect, useMemo, useState } from "react";
 import {
-  ArrowDownRight,
-  AudioLines,
-  ChevronDown,
-  CirclePlus,
-  Clock3,
-  Headphones,
-  Menu,
-  Quote,
-  Sparkles,
-  X,
+  ArrowDownRight, ChevronDown, ChevronLeft, ChevronRight, CirclePlus, Clock3,
+  FileAudio, GripVertical, Headphones, ImagePlus, Menu, Pencil, Play, Plus,
+  Quote, RotateCcw, Save, Settings2, Trash2, Type, Upload, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
-const processEntries = [
-  {
-    id: "01",
-    stage: "Seed",
-    title: "Finding the first motif",
-    detail:
-      "A voice note, a single chord, or a lyric fragment becomes the starting point. This stage is about collecting without judging.",
-    clip: "Process clip · add audio",
-  },
-  {
-    id: "02",
-    stage: "Build",
-    title: "Turning fragments into a world",
-    detail:
-      "I shape the arrangement, test textures, and decide what each section needs to communicate before the words arrive.",
-    clip: "Process clip · add audio",
-  },
-  {
-    id: "03",
-    stage: "Refine",
-    title: "Listening for what is essential",
-    detail:
-      "Revisions focus on clarity: removing what distracts, strengthening the emotional arc, and letting the song breathe.",
-    clip: "Process clip · add audio",
-  },
-];
+type Song = { id: string; title: string; tag: string; story: string; length: string; audio?: string };
+type Influence = { id: string; name: string; source: string; reflection: string };
+type ProcessStage = { id: string; stage: string; title: string; detail: string; audio?: string };
+type SectionId = "inquiry" | "process" | "influences" | "tracks" | "timeline" | "lyrics" | "photos" | "reflection";
+type CanvasBlock = { id: string; kind: "text" | "image"; content: string; x: number; y: number; font: string };
 
-const influences = [
-  {
-    number: "01",
-    name: "Sonic architecture",
-    source: "Production & arrangement",
-    reflection:
-      "I am interested in the way layers can guide a listener through a feeling before a lyric is understood. This influence pushed me to make production choices with intention, not simply to fill space.",
-  },
-  {
-    number: "02",
-    name: "Honest storytelling",
-    source: "Lyric & narrative",
-    reflection:
-      "The artists I return to are precise without explaining everything. I chose this approach because I want my songs to leave room for the listener while still coming from a real experience.",
-  },
-  {
-    number: "03",
-    name: "The album as a whole",
-    source: "Sequencing & cohesion",
-    reflection:
-      "Albums that feel like a complete environment helped me see each track as part of a wider conversation. I chose to work in this form to explore continuity, contrast, and progression.",
-  },
+const defaultSongs: Song[] = [
+  { id: "s1", title: "Song 1", tag: "Track 01", story: "Write the story behind this song here.", length: "00:00" },
+  { id: "s2", title: "Song 2", tag: "Track 02", story: "Write the story behind this song here.", length: "00:00" },
+  { id: "s3", title: "Song 3", tag: "Track 03", story: "Write the story behind this song here.", length: "00:00" },
 ];
-
-const tracks = [
-  {
-    no: "01",
-    title: "Opening Scene",
-    tag: "Beginning",
-    story:
-      "A first step into the album’s emotional space. This track introduces the questions and atmosphere that return across the project.",
-    length: "03:18",
-  },
-  {
-    no: "02",
-    title: "Afterimage",
-    tag: "Memory",
-    story:
-      "Built from small recurring ideas, this song explores how moments stay present long after they have passed.",
-    length: "03:44",
-  },
-  {
-    no: "03",
-    title: "Between Lines",
-    tag: "Tension",
-    story:
-      "A quieter track about the things left unsaid. Its sparer arrangement lets the lyric carry the weight.",
-    length: "04:06",
-  },
-  {
-    no: "04",
-    title: "Northbound",
-    tag: "Release",
-    story:
-      "The final track looks forward. It gathers sounds and themes from earlier songs, then lets them resolve into something more open.",
-    length: "03:27",
-  },
+const defaultInfluences: Influence[] = [
+  { id: "i1", name: "Influence 1", source: "Artist / album / idea", reflection: "Explain why this influence matters to your album." },
+  { id: "i2", name: "Influence 2", source: "Artist / album / idea", reflection: "Explain why this influence matters to your album." },
+  { id: "i3", name: "Influence 3", source: "Artist / album / idea", reflection: "Explain why this influence matters to your album." },
+  { id: "i4", name: "Influence 4", source: "Artist / album / idea", reflection: "Explain why this influence matters to your album." },
+  { id: "i5", name: "Influence 5", source: "Artist / album / idea", reflection: "Explain why this influence matters to your album." },
 ];
+const defaultStages: ProcessStage[] = [
+  { id: "p1", stage: "Stage 01", title: "Starting the songs", detail: "Add a short note about how you began the project." },
+  { id: "p2", stage: "Stage 02", title: "Developing the ideas", detail: "Add a short note about how the songs changed." },
+  { id: "p3", stage: "Stage 03", title: "Final edits", detail: "Add a short note about what you changed before finishing." },
+];
+const defaultSections: SectionId[] = ["inquiry", "process", "influences", "tracks", "timeline", "lyrics", "photos", "reflection"];
+const sectionLabels: Record<SectionId, string> = { inquiry: "Inquiry", process: "Process", influences: "Influences", tracks: "Songs", timeline: "Timeline", lyrics: "Lyrics", photos: "Photos", reflection: "Reflection" };
+const fontOptions = ["Manrope", "Instrument Serif", "DM Mono", "Georgia", "Arial"];
 
-function Waveform() {
-  const bars = [18, 30, 48, 24, 58, 34, 44, 16, 40, 60, 32, 50, 20, 38, 55, 26, 46, 14, 36, 56, 28, 42, 22, 48, 34, 18, 52, 30, 40, 16, 44, 26];
-  return (
-    <div className="waveform" aria-hidden="true">
-      {bars.map((height, index) => (
-        <span key={index} style={{ height: `${height}%` }} />
-      ))}
-    </div>
-  );
+function readSaved<T>(key: string, fallback: T): T { try { const value = localStorage.getItem(key); return value ? JSON.parse(value) : fallback; } catch { return fallback; } }
+function Waveform() { return <div className="waveform" aria-hidden="true">{[18,30,48,24,58,34,44,16,40,60,32,50,20,38,55,26,46,14,36,56,28,42,22,48,34,18].map((h, i) => <span key={i} style={{ height: `${h}%` }} />)}</div>; }
+function FileDrop({ accept, label, onFile }: { accept: string; label: string; onFile: (file: File) => void }) {
+  const [over, setOver] = useState(false);
+  const choose = (e: ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) onFile(file); };
+  const drop = (e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); setOver(false); const file = e.dataTransfer.files?.[0]; if (file) onFile(file); };
+  return <label className={`file-drop ${over ? "file-drop-over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}><Upload size={15} /><span>{label}</span><input type="file" accept={accept} onChange={choose} /></label>;
 }
+function ImagePreview({ src, alt }: { src?: string; alt: string }) { return src ? <img src={src} alt={alt} className="h-full w-full object-cover" /> : <div className="flex h-full min-h-[180px] items-center justify-center text-center"><ImagePlus size={24} /><span className="ml-2 text-xs">Add image</span></div>; }
 
 export default function Home() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [openInfluence, setOpenInfluence] = useState("01");
+  const [editMode, setEditMode] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [openInfluence, setOpenInfluence] = useState("i1");
+  const [songs, setSongs] = useState<Song[]>(() => readSaved("gld-songs", defaultSongs));
+  const [influences, setInfluences] = useState<Influence[]>(() => readSaved("gld-influences", defaultInfluences));
+  const [stages, setStages] = useState<ProcessStage[]>(() => readSaved("gld-stages", defaultStages));
+  const [sections, setSections] = useState<SectionId[]>(() => readSaved("gld-sections", defaultSections));
+  const [albumCover, setAlbumCover] = useState<string | undefined>(() => readSaved("gld-cover", ""));
+  const [photos, setPhotos] = useState<string[]>(() => readSaved("gld-photos", []));
+  const [blocks, setBlocks] = useState<CanvasBlock[]>(() => readSaved("gld-blocks", []));
+  const [activePanel, setActivePanel] = useState<"content" | "layout" | "canvas">("content");
+  const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<{ id: string; ox: number; oy: number } | null>(null);
 
-  const scrollTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-    setMenuOpen(false);
-  };
+  useEffect(() => { localStorage.setItem("gld-songs", JSON.stringify(songs)); localStorage.setItem("gld-influences", JSON.stringify(influences)); localStorage.setItem("gld-stages", JSON.stringify(stages)); localStorage.setItem("gld-sections", JSON.stringify(sections)); localStorage.setItem("gld-cover", JSON.stringify(albumCover || "")); localStorage.setItem("gld-photos", JSON.stringify(photos)); localStorage.setItem("gld-blocks", JSON.stringify(blocks)); }, [songs, influences, stages, sections, albumCover, photos, blocks]);
 
-  const audioPlaceholder = () => {
-    toast("Audio slot ready — replace this placeholder with your exported clip before publishing.");
-  };
+  const scrollTo = (id: string) => { document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); setMobileMenu(false); };
+  const fileToUrl = (file: File, setter: (url: string) => void) => { setter(URL.createObjectURL(file)); toast(`${file.name} added`); };
+  const updateSong = (id: string, key: keyof Song, value: string) => setSongs((items) => items.map((item) => item.id === id ? { ...item, [key]: value } : item));
+  const updateInfluence = (id: string, key: keyof Influence, value: string) => setInfluences((items) => items.map((item) => item.id === id ? { ...item, [key]: value } : item));
+  const updateStage = (id: string, key: keyof ProcessStage, value: string) => setStages((items) => items.map((item) => item.id === id ? { ...item, [key]: value } : item));
+  const reorder = (id: SectionId, direction: -1 | 1) => { const index = sections.indexOf(id); const next = index + direction; if (next < 0 || next >= sections.length) return; const copy = [...sections]; [copy[index], copy[next]] = [copy[next], copy[index]]; setSections(copy); };
+  const addTextBlock = () => { const block = { id: `b${Date.now()}`, kind: "text" as const, content: "Add your text", x: 10, y: 10, font: "Manrope" }; setBlocks((items) => [...items, block]); setSelectedBlock(block.id); setActivePanel("canvas"); };
+  const addImageBlock = (file: File) => { const block = { id: `b${Date.now()}`, kind: "image" as const, content: URL.createObjectURL(file), x: 10, y: 10, font: "Manrope" }; setBlocks((items) => [...items, block]); setSelectedBlock(block.id); setActivePanel("canvas"); };
+  const moveBlock = (event: PointerEvent<HTMLDivElement>) => { if (!dragging) return; const next = { x: Math.max(0, Math.min(82, ((event.clientX - dragging.ox) / window.innerWidth) * 100)), y: Math.max(0, Math.min(88, ((event.clientY - dragging.oy) / window.innerHeight) * 100)) }; setBlocks((items) => items.map((b) => b.id === dragging.id ? { ...b, ...next } : b)); };
+  const resetAll = () => { setSongs(defaultSongs); setInfluences(defaultInfluences); setStages(defaultStages); setSections(defaultSections); setAlbumCover(""); setPhotos([]); setBlocks([]); toast("Sample content restored"); };
+  const activeBlock = useMemo(() => blocks.find((block) => block.id === selectedBlock), [blocks, selectedBlock]);
 
-  return (
-    <div className="min-h-screen overflow-x-hidden bg-[#f3f1eb] text-[#181818]">
-      <header className="sticky top-0 z-50 border-b border-black/10 bg-[#f3f1eb]/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5 sm:px-8">
-          <button onClick={() => scrollTo("top")} className="group flex items-center gap-2 text-left" aria-label="Back to top">
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-[#181818] text-[10px] font-bold text-[#f3f1eb] transition-transform duration-200 group-hover:rotate-12">
-              PI
-            </span>
-            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em]">Personal Inquiry</span>
-          </button>
-          <nav className="hidden items-center gap-6 lg:flex" aria-label="Main navigation">
-            {[["Inquiry", "inquiry"], ["Process", "process"], ["Influences", "influences"], ["Tracklist", "tracks"], ["Reflection", "reflection"]].map(([label, target]) => (
-              <button key={target} onClick={() => scrollTo(target)} className="nav-link text-[11px] font-bold uppercase tracking-[0.14em]">
-                {label}
-              </button>
-            ))}
-          </nav>
-          <button onClick={() => setMenuOpen(!menuOpen)} className="grid h-9 w-9 place-items-center rounded-full border border-black/15 lg:hidden" aria-label="Toggle menu">
-            {menuOpen ? <X size={17} /> : <Menu size={18} />}
-          </button>
-          {menuOpen && (
-            <div className="absolute left-0 top-16 w-full border-b border-black/10 bg-[#f3f1eb] px-5 py-5 shadow-xl lg:hidden">
-              <div className="grid gap-1">
-                {[["Inquiry", "inquiry"], ["Process", "process"], ["Influences", "influences"], ["Tracklist", "tracks"], ["Reflection", "reflection"]].map(([label, target]) => (
-                  <button key={target} onClick={() => scrollTo(target)} className="rounded-lg px-3 py-3 text-left text-sm font-bold uppercase tracking-widest hover:bg-black hover:text-white">
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
+  const nav = [["Inquiry", "inquiry"], ["Process", "process"], ["Influences", "influences"], ["Songs", "tracks"], ["Reflection", "reflection"]];
+  return <div className={`min-h-screen overflow-x-hidden bg-[#f5efe3] text-[#2e2018] ${editMode ? "editing-site" : ""}`}>
+    <header className="sticky top-0 z-40 border-b border-[#2e2018]/15 bg-[#f5efe3]/95 backdrop-blur-xl"><div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5 sm:px-8">
+      <button onClick={() => scrollTo("top")} className="group flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-[#2e2018] text-[10px] font-bold text-[#f5efe3]">PI</span><span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em]">Personal Inquiry</span></button>
+      <nav className="hidden items-center gap-6 lg:flex">{nav.map(([label, target]) => <button key={target} onClick={() => scrollTo(target)} className="nav-link text-[11px] font-bold uppercase tracking-[0.14em]">{label}</button>)}</nav>
+      <div className="flex items-center gap-2"><button onClick={() => setEditMode(!editMode)} className={`edit-toggle hidden items-center gap-2 rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.15em] sm:flex ${editMode ? "border-[#2e2018] bg-[#2e2018] text-[#f5efe3]" : "border-[#2e2018]/25"}`}><Pencil size={13} /> {editMode ? "Preview site" : "Edit site"}</button><button onClick={() => setMobileMenu(!mobileMenu)} className="grid h-9 w-9 place-items-center rounded-full border border-[#2e2018]/20 lg:hidden" aria-label="Toggle menu">{mobileMenu ? <X size={17} /> : <Menu size={18} />}</button></div>
+      {mobileMenu && <div className="absolute left-0 top-16 w-full border-b border-[#2e2018]/15 bg-[#f5efe3] p-5 shadow-xl lg:hidden">{nav.map(([label, target]) => <button key={target} onClick={() => scrollTo(target)} className="block w-full rounded-lg px-3 py-3 text-left text-sm font-bold uppercase tracking-widest hover:bg-[#2e2018] hover:text-[#f5efe3]">{label}</button>)}<button onClick={() => { setEditMode(true); setMobileMenu(false); }} className="mt-2 flex w-full items-center gap-2 rounded-lg bg-[#2e2018] px-3 py-3 text-left text-sm font-bold uppercase tracking-widest text-[#f5efe3]"><Pencil size={14} /> Edit site</button></div>}
+    </div></header>
 
-      <main id="top">
-        <section className="relative border-b border-black/10 pb-12 pt-10 sm:pb-16 sm:pt-16 lg:pb-24 lg:pt-20">
-          <div className="noise absolute inset-0 opacity-[0.035]" />
-          <div className="relative mx-auto max-w-[1440px] px-5 sm:px-8">
-            <div className="mb-10 flex items-center justify-between sm:mb-16">
-              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.19em] text-black/55">GLD Global Leadership Diploma</p>
-              <p className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-black/40 sm:block">2026 · Album Making</p>
-            </div>
-            <div className="grid items-end gap-10 lg:grid-cols-[1.48fr_0.52fr] lg:gap-14">
-              <div>
-                <p className="reveal mb-5 flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-black/55">
-                  <Sparkles size={13} /> A study in sound & self-expression
-                </p>
-                <h1 className="reveal reveal-delay-1 font-display text-[clamp(4.1rem,10.6vw,10.5rem)] font-bold uppercase leading-[0.79] tracking-[-0.065em]">
-                  Making<br />an <em className="font-display font-normal normal-case tracking-[-0.06em]">album.</em>
-                </h1>
-                <div className="reveal reveal-delay-2 mt-9 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-                  <p className="max-w-md text-base leading-7 text-black/65">An inquiry into how a collection of songs can hold a story: from first spark to final sequence.</p>
-                  <button onClick={() => scrollTo("inquiry")} className="inline-flex w-fit items-center gap-2 rounded-full bg-[#181818] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-[#f3f1eb] transition-all duration-200 hover:-translate-y-0.5 hover:bg-black active:scale-[0.97]">
-                    Enter the inquiry <ArrowDownRight size={15} />
-                  </button>
-                </div>
-              </div>
-              <div className="reveal reveal-delay-3 album-art relative mx-auto aspect-square w-full max-w-[395px] overflow-hidden bg-[#181818] p-5 text-[#f3f1eb] shadow-[12px_14px_0_#b9b7b0] lg:ml-auto">
-                <div className="absolute left-[14%] top-[12%] h-[56%] w-[73%] rounded-full border border-white/25" />
-                <div className="absolute left-[29%] top-[27%] h-[34%] w-[45%] rounded-full border border-white/55" />
-                <div className="absolute bottom-10 left-5 right-5 flex items-end justify-between">
-                  <div>
-                    <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/45">Album cover</p>
-                    <p className="mt-1 font-display text-2xl uppercase leading-5 tracking-[-0.04em]">Your<br />artwork</p>
-                  </div>
-                  <span className="font-mono text-[9px] text-white/45">01 / 01</span>
-                </div>
-                <div className="absolute right-5 top-5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/45">Replace me</div>
-              </div>
-            </div>
-          </div>
-        </section>
+    {editMode && <EditorPanel activePanel={activePanel} setActivePanel={setActivePanel} setEditMode={setEditMode} songs={songs} setSongs={setSongs} influences={influences} setInfluences={setInfluences} stages={stages} setStages={setStages} sections={sections} updateSong={updateSong} updateInfluence={updateInfluence} updateStage={updateStage} reorder={reorder} albumCover={albumCover} setAlbumCover={setAlbumCover} photos={photos} setPhotos={setPhotos} addTextBlock={addTextBlock} addImageBlock={addImageBlock} activeBlock={activeBlock} setBlocks={setBlocks} resetAll={resetAll} />}
 
-        <section id="inquiry" className="scroll-mt-20 border-b border-black/10 bg-[#181818] py-16 text-[#f3f1eb] sm:py-24">
-          <div className="mx-auto grid max-w-[1440px] gap-12 px-5 sm:px-8 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20">
-            <div><p className="section-marker"><span>01</span> The inquiry</p></div>
-            <div>
-              <p className="font-display text-4xl leading-[0.94] tracking-[-0.045em] sm:text-5xl lg:text-6xl">How can I use the process of creating an album to develop my musical voice and communicate an honest story?</p>
-              <div className="mt-11 grid gap-9 border-t border-white/20 pt-8 sm:grid-cols-2">
-                <div>
-                  <p className="eyebrow text-white/45">Why this inquiry</p>
-                  <p className="mt-3 text-sm leading-6 text-white/70">Music has always been a way for me to make sense of experiences. I chose album-making because it brings writing, production, performance, and storytelling into one sustained creative challenge.</p>
-                </div>
-                <div>
-                  <p className="eyebrow text-white/45">My intention</p>
-                  <p className="mt-3 text-sm leading-6 text-white/70">To create a body of work that feels connected, where every sonic choice supports the emotional world of the songs—not simply a set of separate tracks.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+    <main id="top">
+      <section className="relative border-b border-[#2e2018]/15 pb-12 pt-10 sm:pb-16 sm:pt-16 lg:pb-24 lg:pt-20"><div className="noise absolute inset-0 opacity-[0.035]" /><div className="relative mx-auto max-w-[1440px] px-5 sm:px-8"><div className="mb-10 flex items-center justify-between sm:mb-16"><p className="font-mono text-[10px] font-bold uppercase tracking-[0.19em] text-[#2e2018]/60">GLD Global Leadership Diploma</p><p className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-[#2e2018]/45 sm:block">G12 · Album Making</p></div><div className="grid items-end gap-10 lg:grid-cols-[1.48fr_0.52fr] lg:gap-14"><div><p className="reveal mb-5 flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-[#2e2018]/60"><Settings2 size={13} /> Personal Inquiry 1</p><h1 className="reveal reveal-delay-1 font-display text-[clamp(4.1rem,10.6vw,10.5rem)] font-bold uppercase leading-[0.79] tracking-[-0.065em]">Making<br />an <em className="font-display font-normal normal-case tracking-[-0.06em]">album.</em></h1><div className="reveal reveal-delay-2 mt-9 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><p className="max-w-md text-base leading-7 text-[#2e2018]/70">An inquiry into making three songs and documenting the decisions behind them.</p><button onClick={() => scrollTo("inquiry")} className="inline-flex w-fit items-center gap-2 rounded-full bg-[#2e2018] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-[#f5efe3] transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.97]">Read the inquiry <ArrowDownRight size={15} /></button></div></div><div className="reveal reveal-delay-3 album-art relative mx-auto aspect-square w-full max-w-[395px] overflow-hidden bg-[#2e2018] p-5 text-[#f5efe3] shadow-[12px_14px_0_#c9b9a5]">{albumCover ? <img src={albumCover} alt="Album cover" className="absolute inset-0 h-full w-full object-cover" /> : <><div className="absolute left-[14%] top-[12%] h-[56%] w-[73%] rounded-full border border-white/25" /><div className="absolute left-[29%] top-[27%] h-[34%] w-[45%] rounded-full border border-white/55" /><div className="absolute bottom-10 left-5 right-5 flex items-end justify-between"><div><p className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/45">Album cover</p><p className="mt-1 font-display text-2xl uppercase leading-5 tracking-[-0.04em]">Your<br />artwork</p></div><span className="font-mono text-[9px] text-white/45">01 / 01</span></div><div className="absolute right-5 top-5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/45">Add artwork</div></>}</div></div></div></section>
 
-        <section id="process" className="scroll-mt-20 border-b border-black/10 py-16 sm:py-24">
-          <div className="mx-auto max-w-[1440px] px-5 sm:px-8">
-            <div className="grid gap-7 border-b border-black/10 pb-10 lg:grid-cols-[0.75fr_1.25fr] lg:pb-14">
-              <div><p className="section-marker"><span>02</span> In the studio</p></div>
-              <div className="max-w-2xl">
-                <h2 className="font-display text-5xl leading-[0.85] tracking-[-0.055em] sm:text-6xl">The sound of<br /><em className="font-normal">becoming.</em></h2>
-                <p className="mt-6 max-w-xl text-base leading-7 text-black/60">The work did not happen in a straight line. These slots are evidence of the decisions, detours, and small discoveries that shaped each song.</p>
-              </div>
-            </div>
-            <div className="divide-y divide-black/10">
-              {processEntries.map((entry) => (
-                <article key={entry.id} className="group grid gap-5 py-8 sm:grid-cols-[80px_1fr_auto] sm:items-center sm:gap-7 sm:py-9">
-                  <p className="font-display text-4xl italic text-black/30">{entry.id}</p>
-                  <div>
-                    <p className="eyebrow">{entry.stage}</p>
-                    <h3 className="mt-1 font-display text-3xl tracking-[-0.04em]">{entry.title}</h3>
-                    <p className="mt-2 max-w-xl text-sm leading-6 text-black/60">{entry.detail}</p>
-                  </div>
-                  <button onClick={audioPlaceholder} className="flex items-center gap-4 text-left sm:min-w-[285px]" aria-label={`Add audio for ${entry.title}`}>
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#181818] text-white transition-transform duration-200 hover:scale-105 active:scale-95"><CirclePlus size={17} /></span>
-                    <span className="min-w-0 flex-1">
-                      <Waveform />
-                      <span className="mt-2 block font-mono text-[9px] uppercase tracking-[0.14em] text-black/45">{entry.clip}</span>
-                    </span>
-                  </button>
-                </article>
-              ))}
-            </div>
-            <p className="mt-7 flex items-center gap-2 font-mono text-[10px] leading-5 text-black/40"><AudioLines size={14} /> Add MP3 or WAV clips here to make the process tangible.</p>
-          </div>
-        </section>
+      <section id="inquiry" className="scroll-mt-20 border-b border-black/10 bg-[#2e2018] py-16 text-[#f5efe3] sm:py-24"><div className="mx-auto grid max-w-[1440px] gap-12 px-5 sm:px-8 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20"><div><p className="section-marker"><span>01</span> Inquiry</p></div><div><p className="font-display text-4xl leading-[0.94] tracking-[-0.045em] sm:text-5xl lg:text-6xl">How can I use album making to develop my musical voice and communicate a clear story?</p><div className="mt-11 grid gap-9 border-t border-white/20 pt-8 sm:grid-cols-2"><div><p className="eyebrow text-white/50">Why I chose this</p><p className="mt-3 text-sm leading-6 text-white/72">Write why you chose album making for this inquiry and what you wanted to find out.</p></div><div><p className="eyebrow text-white/50">What I wanted to make</p><p className="mt-3 text-sm leading-6 text-white/72">Write what you wanted the three songs to show about your process and musical choices.</p></div></div></div></div></section>
 
-        <section id="influences" className="scroll-mt-20 border-b border-black/10 bg-[#e7e5de] py-16 sm:py-24">
-          <div className="mx-auto max-w-[1440px] px-5 sm:px-8">
-            <div className="grid gap-8 lg:grid-cols-[0.75fr_1.25fr]">
-              <div>
-                <p className="section-marker"><span>03</span> References</p>
-                <p className="mt-8 max-w-[230px] text-sm leading-6 text-black/55">Rather than copying a sound, I studied the creative principles that make these approaches resonate with me.</p>
-              </div>
-              <div>
-                <h2 className="font-display text-5xl leading-[0.84] tracking-[-0.055em] sm:text-6xl">What I listened<br />for.</h2>
-                <div className="mt-10 border-t border-black/15">
-                  {influences.map((influence) => {
-                    const isOpen = openInfluence === influence.number;
-                    return (
-                      <div className="border-b border-black/15" key={influence.number}>
-                        <button onClick={() => setOpenInfluence(isOpen ? "" : influence.number)} className="grid w-full grid-cols-[42px_1fr_auto] items-center gap-3 py-6 text-left sm:grid-cols-[75px_1fr_auto] sm:py-7" aria-expanded={isOpen}>
-                          <span className="font-mono text-[10px] text-black/45">{influence.number}</span>
-                          <span>
-                            <span className="block font-display text-2xl tracking-[-0.035em] sm:text-3xl">{influence.name}</span>
-                            <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.15em] text-black/45">{influence.source}</span>
-                          </span>
-                          <ChevronDown className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} size={18} />
-                        </button>
-                        <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
-                          <div className="overflow-hidden"><p className="max-w-2xl pb-7 pl-[42px] text-sm leading-6 text-black/65 sm:pl-[75px]">{influence.reflection}</p></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+      {sections.map((section, index) => section !== "inquiry" && <Section key={section} section={section} number={String(index + 1).padStart(2, "0")} stages={stages} songs={songs} influences={influences} openInfluence={openInfluence} setOpenInfluence={setOpenInfluence} photos={photos} setPhotos={setPhotos} />)}
+      <Canvas blocks={blocks} selectedBlock={selectedBlock} setSelectedBlock={setSelectedBlock} setDragging={setDragging} dragging={dragging} moveBlock={moveBlock} />
+    </main>
+    <footer className="bg-[#2e2018] px-5 pb-7 text-[#f5efe3] sm:px-8"><div className="mx-auto flex max-w-[1440px] justify-between border-t border-white/15 pt-6"><p className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/50">Personal Inquiry · Album Making</p><button onClick={() => scrollTo("top")} className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/50 hover:text-white">Back to top ↑</button></div></footer>
+  </div>;
+}
 
-        <section id="tracks" className="scroll-mt-20 border-b border-black/10 py-16 sm:py-24">
-          <div className="mx-auto max-w-[1440px] px-5 sm:px-8">
-            <div className="flex flex-col justify-between gap-5 border-b border-black/10 pb-10 sm:flex-row sm:items-end">
-              <div><p className="section-marker"><span>04</span> The album</p><h2 className="mt-7 font-display text-5xl leading-[0.85] tracking-[-0.055em] sm:text-6xl">Track by track.</h2></div>
-              <p className="max-w-sm text-sm leading-6 text-black/55">Every song carries its own point of view. Together, they make an emotional map of the inquiry.</p>
-            </div>
-            <div className="grid lg:grid-cols-2">
-              {tracks.map((track, index) => (
-                <article key={track.no} className={`track-card group relative border-b border-black/10 py-8 ${index % 2 === 0 ? "lg:pr-10" : "lg:border-l lg:pl-10"}`}>
-                  <div className="flex items-start justify-between"><span className="font-mono text-[10px] text-black/45">{track.no}</span><span className="rounded-full border border-black/15 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.13em] text-black/50">{track.tag}</span></div>
-                  <h3 className="mt-11 font-display text-4xl tracking-[-0.045em]">{track.title}</h3>
-                  <p className="mt-3 max-w-md text-sm leading-6 text-black/60">{track.story}</p>
-                  <div className="mt-7 flex items-center justify-between border-t border-black/10 pt-4"><span className="font-mono text-[10px] uppercase tracking-[0.14em] text-black/45">{track.length}</span><span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-black/45"><Headphones size={13} /> Song story</span></div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
+function Section({ section, number, stages, songs, influences, openInfluence, setOpenInfluence, photos, setPhotos }: { section: SectionId; number: string; stages: ProcessStage[]; songs: Song[]; influences: Influence[]; openInfluence: string; setOpenInfluence: (id: string) => void; photos: string[]; setPhotos: Dispatch<SetStateAction<string[]>> }) {
+  if (section === "process") return <section id="process" className="scroll-mt-20 border-b border-[#2e2018]/15 py-16 sm:py-24"><div className="mx-auto max-w-[1440px] px-5 sm:px-8"><div className="grid gap-7 border-b border-[#2e2018]/15 pb-10 lg:grid-cols-[0.75fr_1.25fr] lg:pb-14"><div><p className="section-marker"><span>{number}</span> Process</p></div><div><h2 className="font-display text-5xl leading-[0.85] tracking-[-0.055em] sm:text-6xl">How the songs<br /><em className="font-normal">developed.</em></h2><p className="mt-6 max-w-xl text-base leading-7 text-[#2e2018]/65">Audio evidence, short notes, and screenshots can go here to show the progress of the project.</p></div></div><div className="divide-y divide-[#2e2018]/15">{stages.map((stage) => <article key={stage.id} className="grid gap-5 py-8 sm:grid-cols-[80px_1fr_auto] sm:items-center sm:gap-7"><p className="font-display text-4xl italic text-[#2e2018]/30">{stage.stage.slice(-2)}</p><div><p className="eyebrow">{stage.stage}</p><h3 className="mt-1 font-display text-3xl tracking-[-0.04em]">{stage.title}</h3><p className="mt-2 max-w-xl text-sm leading-6 text-[#2e2018]/65">{stage.detail}</p></div><div className="flex items-center gap-4 sm:min-w-[285px]"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#2e2018] text-[#f5efe3]"><Play size={15} /></span><div className="min-w-0 flex-1"><Waveform /><p className="mt-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[#2e2018]/45">{stage.audio ? "Audio added" : "Add audio in Edit site"}</p></div></div></article>)}</div></div></section>;
+  if (section === "influences") return <section id="influences" className="scroll-mt-20 border-b border-[#2e2018]/15 bg-[#e5d8c7] py-16 sm:py-24"><div className="mx-auto max-w-[1440px] px-5 sm:px-8"><div className="grid gap-8 lg:grid-cols-[0.75fr_1.25fr]"><div><p className="section-marker"><span>{number}</span> Influences</p><p className="mt-8 max-w-[230px] text-sm leading-6 text-[#2e2018]/60">List five artists, albums, or ideas and explain why each one influenced your choices.</p></div><div><h2 className="font-display text-5xl leading-[0.84] tracking-[-0.055em] sm:text-6xl">What I<br />used.</h2><div className="mt-10 border-t border-[#2e2018]/15">{influences.map((influence) => { const isOpen = openInfluence === influence.id; return <div className="border-b border-[#2e2018]/15" key={influence.id}><button onClick={() => setOpenInfluence(isOpen ? "" : influence.id)} className="grid w-full grid-cols-[42px_1fr_auto] items-center gap-3 py-6 text-left sm:grid-cols-[75px_1fr_auto] sm:py-7"><span className="font-mono text-[10px] text-[#2e2018]/45">{influences.indexOf(influence) + 1}</span><span><span className="block font-display text-2xl tracking-[-0.035em] sm:text-3xl">{influence.name}</span><span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.15em] text-[#2e2018]/45">{influence.source}</span></span><ChevronDown className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} size={18} /></button><div className={`grid transition-[grid-template-rows] duration-300 ${isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}><div className="overflow-hidden"><p className="max-w-2xl pb-7 pl-[42px] text-sm leading-6 text-[#2e2018]/70 sm:pl-[75px]">{influence.reflection}</p></div></div></div>; })}</div></div></div></div></section>;
+  if (section === "tracks") return <section id="tracks" className="scroll-mt-20 border-b border-[#2e2018]/15 py-16 sm:py-24"><div className="mx-auto max-w-[1440px] px-5 sm:px-8"><div className="flex flex-col justify-between gap-5 border-b border-[#2e2018]/15 pb-10 sm:flex-row sm:items-end"><div><p className="section-marker"><span>{number}</span> Songs</p><h2 className="mt-7 font-display text-5xl leading-[0.85] tracking-[-0.055em] sm:text-6xl">Three songs.</h2></div><p className="max-w-sm text-sm leading-6 text-[#2e2018]/60">Add the titles, duration, and story for each song.</p></div><div className="grid lg:grid-cols-3">{songs.map((song, index) => <article key={song.id} className="track-card border-b border-[#2e2018]/15 py-8 lg:border-r lg:px-8 first:lg:pl-0 last:lg:border-r-0"><div className="flex items-start justify-between"><span className="font-mono text-[10px] text-[#2e2018]/45">0{index + 1}</span><span className="rounded-full border border-[#2e2018]/15 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.13em] text-[#2e2018]/50">{song.tag}</span></div><h3 className="mt-11 font-display text-4xl tracking-[-0.045em]">{song.title}</h3><p className="mt-3 min-h-12 max-w-md text-sm leading-6 text-[#2e2018]/65">{song.story}</p><div className="mt-7 flex items-center justify-between border-t border-[#2e2018]/10 pt-4"><span className="font-mono text-[10px] text-[#2e2018]/45">{song.length}</span><span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[#2e2018]/45"><Headphones size={13} /> Audio</span></div></article>)}</div></div></section>;
+  if (section === "timeline") return <section id="timeline" className="scroll-mt-20 border-b border-[#2e2018]/15 bg-[#f0e7d9] py-16 sm:py-24"><div className="mx-auto grid max-w-[1440px] gap-12 px-5 sm:px-8 lg:grid-cols-[0.75fr_1.25fr]"><div><p className="section-marker"><span>{number}</span> Timeline</p><p className="mt-8 max-w-[230px] text-sm leading-6 text-[#2e2018]/60">Add dates to show how the project moved from first idea to final version.</p></div><div><h2 className="font-display text-5xl leading-[0.84] tracking-[-0.055em] sm:text-6xl">Dates &<br /><em className="font-normal">milestones.</em></h2><div className="mt-10 grid gap-0 border-t border-[#2e2018]/15"><div className="grid grid-cols-[90px_1fr] gap-5 border-b border-[#2e2018]/15 py-6"><span className="font-mono text-[10px] text-[#2e2018]/45">DATE</span><p className="text-sm text-[#2e2018]/65">First idea / first recording</p></div><div className="grid grid-cols-[90px_1fr] gap-5 border-b border-[#2e2018]/15 py-6"><span className="font-mono text-[10px] text-[#2e2018]/45">DATE</span><p className="text-sm text-[#2e2018]/65">Main production / revisions</p></div><div className="grid grid-cols-[90px_1fr] gap-5 border-b border-[#2e2018]/15 py-6"><span className="font-mono text-[10px] text-[#2e2018]/45">DATE</span><p className="text-sm text-[#2e2018]/65">Final export / reflection</p></div></div></div></div></section>;
+  if (section === "lyrics") return <section id="lyrics" className="scroll-mt-20 border-b border-[#2e2018]/15 bg-[#2e2018] py-16 text-[#f5efe3] sm:py-24"><div className="mx-auto grid max-w-[1440px] gap-12 px-5 sm:px-8 lg:grid-cols-[0.75fr_1.25fr]"><div><p className="section-marker"><span>{number}</span> Lyrics</p></div><div><Quote className="mb-7 text-white/35" size={34} strokeWidth={1.5} /><p className="font-display text-4xl leading-[0.96] tracking-[-0.047em] sm:text-5xl">Add short lyric excerpts here and explain why these lines matter to the song.</p><p className="mt-8 max-w-xl border-t border-white/20 pt-6 text-sm leading-6 text-white/65">Keep excerpts brief and use this section to connect the words to your inquiry.</p></div></div></section>;
+  if (section === "photos") return <section id="photos" className="scroll-mt-20 border-b border-[#2e2018]/15 py-16 sm:py-24"><div className="mx-auto max-w-[1440px] px-5 sm:px-8"><div className="flex flex-col justify-between gap-5 border-b border-[#2e2018]/15 pb-10 sm:flex-row sm:items-end"><div><p className="section-marker"><span>{number}</span> Photos</p><h2 className="mt-7 font-display text-5xl leading-[0.85] tracking-[-0.055em] sm:text-6xl">During the<br /><em className="font-normal">process.</em></h2></div><p className="max-w-sm text-sm leading-6 text-[#2e2018]/60">Add screenshots or photos from the project in Edit site.</p></div><div className="mt-10 grid gap-4 sm:grid-cols-3">{[0,1,2].map((slot) => <div key={slot} className="aspect-[4/3] overflow-hidden bg-[#e5d8c7]"><ImagePreview src={photos[slot]} alt={`Process photo ${slot + 1}`} /></div>)}</div></div></section>;
+  return <section id="reflection" className="scroll-mt-20 border-b border-black/10 bg-[#2e2018] py-16 text-[#f5efe3] sm:py-24"><div className="mx-auto grid max-w-[1440px] gap-12 px-5 sm:px-8 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20"><div><p className="section-marker"><span>{number}</span> Reflection</p><div className="mt-16 flex items-center gap-3 text-white/45"><Clock3 size={15} /><span className="font-mono text-[10px] uppercase tracking-[0.15em]">What I learned</span></div></div><div><p className="font-display text-4xl leading-[0.96] tracking-[-0.047em] sm:text-5xl lg:text-6xl">Write what you learned from making the album, including changes in craft, confidence, and perspective.</p></div></div></section>;
+}
 
-        <section id="reflection" className="scroll-mt-20 bg-[#181818] py-16 text-[#f3f1eb] sm:py-24">
-          <div className="mx-auto grid max-w-[1440px] gap-12 px-5 sm:px-8 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20">
-            <div>
-              <p className="section-marker"><span>05</span> Reflection</p>
-              <div className="mt-16 flex items-center gap-3 text-white/45"><Clock3 size={15} /><span className="font-mono text-[10px] uppercase tracking-[0.15em]">Looking back</span></div>
-            </div>
-            <div>
-              <Quote className="mb-7 text-white/35" size={34} strokeWidth={1.5} />
-              <p className="font-display text-4xl leading-[0.96] tracking-[-0.047em] sm:text-5xl lg:text-6xl">I learnt that the most important part of making music is not reaching a perfect version; it is learning to hear what a song is asking for.</p>
-              <div className="mt-12 grid gap-8 border-t border-white/20 pt-8 sm:grid-cols-3">
-                <div><p className="eyebrow text-white/45">Craft</p><p className="mt-3 text-sm leading-6 text-white/70">I developed a more deliberate workflow for writing, arranging, and revising music.</p></div>
-                <div><p className="eyebrow text-white/45">Voice</p><p className="mt-3 text-sm leading-6 text-white/70">I became more confident in trusting my instincts and making choices that feel like mine.</p></div>
-                <div><p className="eyebrow text-white/45">Perspective</p><p className="mt-3 text-sm leading-6 text-white/70">I learnt to see feedback as a tool for clarity, not a reason to lose the idea at the centre.</p></div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
+function Canvas({ blocks, selectedBlock, setSelectedBlock, setDragging, dragging, moveBlock }: { blocks: CanvasBlock[]; selectedBlock: string | null; setSelectedBlock: (id: string | null) => void; setDragging: (value: { id: string; ox: number; oy: number } | null) => void; dragging: { id: string; ox: number; oy: number } | null; moveBlock: (event: PointerEvent<HTMLDivElement>) => void }) {
+  if (!blocks.length) return null;
+  return <section className="custom-canvas relative mx-auto min-h-[420px] max-w-[1440px] overflow-hidden border-y border-dashed border-[#2e2018]/20 px-5 sm:px-8" onPointerMove={moveBlock} onPointerUp={() => setDragging(null)}><p className="pointer-events-none absolute left-5 top-5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#2e2018]/35 sm:left-8">Custom items · drag to position</p>{blocks.map((block) => <div key={block.id} onClick={() => setSelectedBlock(block.id)} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setSelectedBlock(block.id); setDragging({ id: block.id, ox: e.clientX - (window.innerWidth * block.x / 100), oy: e.clientY - (window.innerHeight * block.y / 100) }); }} style={{ left: `${block.x}%`, top: `${block.y}%`, fontFamily: block.font }} className={`canvas-block ${selectedBlock === block.id ? "canvas-block-selected" : ""}`}>{block.kind === "image" ? <img src={block.content} alt="Custom process image" /> : <span>{block.content}</span>}<GripVertical className="canvas-grip" size={13} /></div>)}</section>;
+}
 
-      <footer className="bg-[#181818] px-5 pb-7 sm:px-8">
-        <div className="mx-auto flex max-w-[1440px] flex-col justify-between gap-5 border-t border-white/15 pt-6 text-white/45 sm:flex-row sm:items-center">
-          <p className="font-mono text-[9px] uppercase tracking-[0.16em]">Personal Inquiry · Album Making</p>
-          <button onClick={() => scrollTo("top")} className="font-mono text-[9px] uppercase tracking-[0.16em] transition-colors hover:text-white">Back to the beginning ↑</button>
-        </div>
-      </footer>
-    </div>
-  );
+function EditorPanel(props: any) {
+  const { activePanel, setActivePanel, setEditMode, songs, setSongs, influences, setInfluences, stages, setStages, sections, updateSong, updateInfluence, updateStage, reorder, albumCover, setAlbumCover, photos, setPhotos, addTextBlock, addImageBlock, activeBlock, setBlocks, resetAll } = props;
+  const [tab, setTab] = useState(activePanel);
+  const panel = (next: "content" | "layout" | "canvas") => { setTab(next); setActivePanel(next); };
+  const field = (label: string, value: string, onChange: (value: string) => void, multiline = false) => <label className="editor-field"><span>{label}</span>{multiline ? <textarea value={value} onChange={(e) => onChange(e.target.value)} /> : <input value={value} onChange={(e) => onChange(e.target.value)} />}</label>;
+  return <aside className="editor-panel" aria-label="Site editor"><div className="editor-head"><div><p className="eyebrow">Local editor</p><h2>Edit your site</h2></div><button onClick={() => setEditMode(false)} aria-label="Close editor"><X size={18} /></button></div><div className="editor-tabs"><button className={tab === "content" ? "active" : ""} onClick={() => panel("content")}><Type size={14} /> Content</button><button className={tab === "layout" ? "active" : ""} onClick={() => panel("layout")}><GripVertical size={14} /> Order</button><button className={tab === "canvas" ? "active" : ""} onClick={() => panel("canvas")}><Settings2 size={14} /> Add items</button></div>
+    {tab === "content" && <div className="editor-scroll"><div className="editor-note">Changes save in this browser automatically. Use <strong>Preview site</strong> to see the presentation without publishing.</div><h3 className="editor-title">Album cover</h3><FileDrop accept="image/*" label={albumCover ? "Replace cover image" : "Drag & drop cover image"} onFile={(file) => { const url = URL.createObjectURL(file); setAlbumCover(url); }} />{albumCover && <button className="text-button" onClick={() => setAlbumCover("")}><Trash2 size={13} /> Remove cover</button>}<h3 className="editor-title">Songs · {songs.length}</h3>{songs.map((song: Song, i: number) => <div className="editor-card" key={song.id}><div className="editor-card-head"><strong>Song {i + 1}</strong><button onClick={() => setSongs(songs.filter((item: Song) => item.id !== song.id))}><Trash2 size={14} /></button></div>{field("Title", song.title, (v) => updateSong(song.id, "title", v))}{field("Label", song.tag, (v) => updateSong(song.id, "tag", v))}{field("Duration", song.length, (v) => updateSong(song.id, "length", v))}{field("Story", song.story, (v) => updateSong(song.id, "story", v), true)}<FileDrop accept="audio/mpeg,audio/wav,audio/*" label={song.audio ? "Replace audio" : "Drag & drop MP3 / WAV"} onFile={(file) => updateSong(song.id, "audio", URL.createObjectURL(file))} />{song.audio && <audio controls src={song.audio} className="w-full" />}</div>)}<button className="add-button" onClick={() => setSongs([...songs, { id: `s${Date.now()}`, title: `Song ${songs.length + 1}`, tag: `Track ${String(songs.length + 1).padStart(2, "0")}`, story: "Write the story behind this song here.", length: "00:00" }])}><Plus size={14} /> Add song</button><h3 className="editor-title">Influences · {influences.length}</h3>{influences.map((item: Influence, i: number) => <div className="editor-card" key={item.id}><div className="editor-card-head"><strong>Influence {i + 1}</strong><button onClick={() => setInfluences(influences.filter((x: Influence) => x.id !== item.id))}><Trash2 size={14} /></button></div>{field("Name", item.name, (v) => updateInfluence(item.id, "name", v))}{field("Source", item.source, (v) => updateInfluence(item.id, "source", v))}{field("Why I chose it", item.reflection, (v) => updateInfluence(item.id, "reflection", v), true)}</div>)}<button className="add-button" onClick={() => setInfluences([...influences, { id: `i${Date.now()}`, name: `Influence ${influences.length + 1}`, source: "Artist / album / idea", reflection: "Explain why this influence matters to your album." }])}><Plus size={14} /> Add influence</button><h3 className="editor-title">Process stages</h3>{stages.map((stage: ProcessStage, i: number) => <div className="editor-card" key={stage.id}><div className="editor-card-head"><strong>Stage {i + 1}</strong></div>{field("Heading", stage.title, (v) => updateStage(stage.id, "title", v))}{field("Note", stage.detail, (v) => updateStage(stage.id, "detail", v), true)}<FileDrop accept="audio/mpeg,audio/wav,audio/*" label={stage.audio ? "Replace audio" : "Add progress audio"} onFile={(file) => updateStage(stage.id, "audio", URL.createObjectURL(file))} /></div>)}<h3 className="editor-title">Process photos</h3><FileDrop accept="image/*" label="Drag & drop a process photo" onFile={(file) => setPhotos([...photos, URL.createObjectURL(file)].slice(0, 6))} />{photos.length > 0 && <button className="text-button" onClick={() => setPhotos([])}><Trash2 size={13} /> Remove all photos</button>}<button className="reset-button" onClick={resetAll}><RotateCcw size={13} /> Restore sample content</button></div>}
+    {tab === "layout" && <div className="editor-scroll"><div className="editor-note">Use the arrows to reorder the main sections. The published preview will follow this order.</div>{sections.map((id: SectionId, index: number) => <div className="order-row" key={id}><GripVertical size={14} /><span>{sectionLabels[id]}</span><div><button onClick={() => reorder(id, -1)} disabled={index === 0}><ChevronLeft size={14} /></button><button onClick={() => reorder(id, 1)} disabled={index === sections.length - 1}><ChevronRight size={14} /></button></div></div>)}</div>}
+    {tab === "canvas" && <div className="editor-scroll"><div className="editor-note">Add text or images, then drag them on the page. Select a block to change its typeface or remove it.</div><div className="canvas-actions"><button className="add-button" onClick={addTextBlock}><Type size={14} /> Add text</button><FileDrop accept="image/*" label="Add image" onFile={addImageBlock} /></div>{activeBlock && <div className="editor-card">{activeBlock.kind === "text" && field("Text", activeBlock.content, (v: string) => setBlocks((items: CanvasBlock[]) => items.map((b) => b.id === activeBlock.id ? { ...b, content: v } : b)), true)}<label className="editor-field"><span>Font</span><select value={activeBlock.font} onChange={(e) => setBlocks((items: CanvasBlock[]) => items.map((b) => b.id === activeBlock.id ? { ...b, font: e.target.value } : b))}>{fontOptions.map((font) => <option key={font}>{font}</option>)}</select></label><button className="text-button" onClick={() => setBlocks((items: CanvasBlock[]) => items.filter((b) => b.id !== activeBlock.id))}><Trash2 size={13} /> Remove selected item</button></div>}</div>}
+  </aside>;
 }
